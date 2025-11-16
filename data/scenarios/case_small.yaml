@@ -1,0 +1,7 @@
+fires:
+  - { id: F1, x: 40, y: 110, intensity: 1.0 }
+  - { id: F2, x: 55, y: 120, intensity: 0.8 }
+
+uav_starts:
+  - { id: U1, x: 5,  y: 0 }
+  - { id: U2, x: 75, y: 0 }
