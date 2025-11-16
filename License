@@ -1,0 +1,11 @@
+MIT (or your preference)
+
+---
+
+## requirements.txt
+```text
+numpy>=1.26
+scipy>=1.11
+networkx>=3.2
+matplotlib>=3.8
+PyYAML>=6.0
