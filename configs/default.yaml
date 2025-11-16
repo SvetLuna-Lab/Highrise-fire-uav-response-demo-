@@ -1,0 +1,38 @@
+sim:
+  dt: 0.5          # seconds
+  t_max: 600       # total sim time (s)
+  seed: 42
+
+building:
+  spec: data/building_130f.json
+
+env:
+  wind_profile: data/wind_profiles.yaml
+  gust_sigma: 1.5   # m/s random gusts, 0 = off
+
+uav:
+  count: 4
+  mass_kg: 12.0
+  max_thrust_n: 160.0
+  tank_liters: 15.0
+  flow_lps: 0.8       # liters per second (suppression flow)
+  v_cruise: 10.0
+  v_max: 18.0
+
+safety:
+  geofence_margin_m: 2.0
+  gust_limit_ms: 12.0
+  min_batt_pct: 15.0
+
+planner:
+  kind: "astar"       # demo: only astar
+  grid: "square"      # square|hex (demo uses square)
+  wind_penalty: 0.5   # extra edge cost factor per m/s
+
+allocation:
+  kind: "hungarian"
+
+report:
+  out_dir: "reports"
+  save_csv: true
+  save_png: true
