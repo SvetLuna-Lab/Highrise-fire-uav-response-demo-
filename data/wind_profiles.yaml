@@ -1,0 +1,7 @@
+# Simple vertical wind profile: (altitude_m, wind_ms)
+profile:
+  - [0,   2.0]
+  - [50,  3.5]
+  - [100, 5.0]
+  - [200, 7.0]
+  - [300, 9.0]
