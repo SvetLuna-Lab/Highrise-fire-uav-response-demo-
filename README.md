@@ -1,0 +1,173 @@
+# Highrise-fire-uav-response-demo
+
+Simulation demo: coordinating a small fleet of UAVs to suppress fires on upper floors of a 130-floor building (facade operations only).  
+**Goal:** a clean, auditable baseline for planning, allocation, safety logic, and simple performance metrics.  
+**Python 3.10+**
+
+> Educational simulator — not an engineering guarantee. No indoor flight, no CFD, no certified safety.
+
+---
+
+## Repository structure
+
+```text
+highrise-fire-uav-response-demo/
+├─ configs/
+│  └─ default.yaml
+├─ data/
+│  ├─ building_130f.json
+│  ├─ wind_profiles.yaml
+│  └─ scenarios/
+│     ├─ case_small.yaml
+│     └─ case_multi.yaml
+├─ reports/
+│  └─ .gitkeep
+├─ src/
+│  ├─ __init__.py
+│  ├─ env.py               # 2.5D facade environment, wind field, fires
+│  ├─ dynamics.py          # simple kinematics + integrator
+│  ├─ safety.py            # geofence, gust limit, RTL triggers
+│  ├─ sensing.py           # proximity fire detection (stub)
+│  ├─ allocation.py        # Hungarian assignment (ETA matrix)
+│  ├─ planner.py           # A* path planner (grid)
+│  ├─ controller.py        # waypoint tracker (PID-like)
+│  ├─ agents.py            # UAV state model
+│  ├─ suppression.py       # suppression effect proxy
+│  ├─ sim_loop.py          # main simulation loop + logging
+│  ├─ eval_metrics.py      # response/coverage/temp/safety/score
+│  ├─ visualize.py         # matplotlib path plot
+│  └─ run_scenario.py      # CLI entrypoint
+├─ tests/
+│  ├─ __init__.py
+│  ├─ test_allocation.py
+│  ├─ test_planner.py
+│  └─ test_safety.py
+├─ .gitignore
+├─ Makefile
+├─ CHANGELOG.md
+├─ LICENSE
+├─ README.md
+├─ requirements.txt
+└─ requirements-dev.txt
+
+
+Quick start
+
+# 1) Install runtime deps
+pip install -r requirements.txt
+
+# 2) (optional) Dev/test tools
+pip install -r requirements-dev.txt
+
+# 3) Run default scenario
+python -m src.run_scenario --config configs/default.yaml
+
+# Artifacts (written to ./reports)
+# - reports/mission_log.csv   (per-step events)
+# - reports/summary.json      (aggregated metrics)
+# - reports/paths.png         (paths + fire locations)
+
+# 4) Run a specific scenario
+python -m src.run_scenario --config configs/default.yaml --scenario data/scenarios/case_small.yaml
+
+# 5) Tests
+pytest -q
+
+
+
+Makefile shortcuts
+
+make setup     # pip install -r requirements.txt
+make run       # run default scenario
+make run-small # run case_small scenario
+make test      # pytest -q
+make clean     # remove reports/*.csv|*.json|*.png
+
+
+
+Inputs
+
+Building: data/building_130f.json
+Discrete facade grid, 130 floors, cell size, access points, no-fly zones.
+
+Wind profile: data/wind_profiles.yaml
+Piecewise-linear vertical wind magnitude (m/s) vs altitude (m).
+
+Scenarios: data/scenarios/*.yaml
+Fire cells (id, x, y, intensity) and UAV starting points.
+
+
+What the simulator does
+
+Environment: 2.5D facade grid; altitude-dependent wind; no-fly masks.
+
+Allocation: Hungarian algorithm on ETA matrix (minimal arrival time).
+
+Planning: A* (4-neighbors) with wind penalty in edge cost.
+
+Control: waypoint tracking (PID-like), speed clamp.
+
+Safety: geofence margin, gust limit (stub), low-battery RTL.
+
+Suppression: flow-based temperature-drop proxy (intensity ↓).
+
+Metrics:
+
+response_time_s — first UAV arrival time;
+
+coverage_pct — fraction of fires extinguished (intensity→0);
+
+temp_drop_proxy — accumulated proxy for cooling;
+
+safety_score — normalized penalty for violations;
+
+mission_score — 0.4*coverage + 0.3*temp - 0.3*penalty.
+
+Reports: CSV log, JSON summary, PNG path plot.
+
+
+Example console output
+
+=== Highrise UAV fire response demo complete ===
+Logs:     reports/mission_log.csv
+Summary:  reports/summary.json
+Plot:     reports/paths.png
+
+
+
+Limitations
+
+Facade-only; no indoor flight; simplified wind/physics; no CFD/smoke occlusion.
+
+Constant UAV parameters; single-shot planning (demo); no refills/multi-goal routing.
+
+For research/education only.
+
+
+Roadmap
+
+Hex grid + corridor channels; refills and multi-goal routes.
+
+Stronger wind/smoke models; basic CV (thermal/video) detector stub.
+
+Multi-agent policies (task re-allocation, comms loss); ROS2/Gazebo bridge.
+
+Richer safety taxonomy and per-event dashboards.
+
+
+Versioning
+
+This project follows Semantic Versioning. See CHANGELOG.md for releases and notes.
+
+
+License
+
+See LICENSE for details (MIT recommended).
+If you need a different license for integration/teaching, open an Issue.
+
+
+Contributing
+
+Issues and PRs are welcome. Please keep changes small and focused (one feature or fix per PR) and include tests where applicable.
+
+
