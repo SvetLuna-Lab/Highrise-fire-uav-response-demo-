@@ -1,2 +1,5 @@
-pytest
-pytest-cov
+**requirements-dev.txt**
+```text
+pytest>=7.0
+pytest-cov>=4.0
+
