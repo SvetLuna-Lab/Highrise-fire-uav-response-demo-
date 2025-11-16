@@ -1,11 +1,6 @@
-MIT (or your preference)
+MIT License
 
----
+Copyright (c) 2025 ...
 
-## requirements.txt
-```text
-numpy>=1.26
-scipy>=1.11
-networkx>=3.2
-matplotlib>=3.8
-PyYAML>=6.0
+Permission is hereby granted, free of charge, to any person obtaining a copy
+...
