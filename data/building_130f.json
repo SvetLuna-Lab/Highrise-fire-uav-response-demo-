@@ -1,0 +1,17 @@
+{
+  "name": "DemoTower",
+  "floors": 130,
+  "grid": {
+    "width_cells": 80,
+    "height_cells": 130,
+    "cell_size_m": 1.0
+  },
+  "access_points": [
+    { "id": "BASE_W1", "x": 5, "y": 0 },
+    { "id": "BASE_E1", "x": 75, "y": 0 }
+  ],
+  "no_fly_zones": [
+    { "rect": [0, 0, 3, 130] },
+    { "rect": [77, 0, 80, 130] }
+  ]
+}
