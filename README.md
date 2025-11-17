@@ -14,7 +14,8 @@ Simulation demo: coordinating a small fleet of UAVs to suppress fires on upper f
 ```text
 highrise-fire-uav-response-demo/
 ├─ configs/
-│  └─ default.yaml
+│  ├─ default.yaml
+│  └─ tethered_case.yaml
 ├─ data/
 │  ├─ building_130f.json
 │  ├─ wind_profiles.yaml
@@ -22,29 +23,32 @@ highrise-fire-uav-response-demo/
 │     ├─ case_small.yaml
 │     └─ case_multi.yaml
 ├─ reports/
-│  └─ .gitkeep
-│  └─ paths_demo.png
+│  ├─ .gitkeep
+│  ├─ paths_demo.png
 │  └─ summary_demo.json
 ├─ src/
 │  ├─ __init__.py
-│  ├─ env.py               # 2.5D facade environment, wind field, fires
-│  ├─ dynamics.py          # simple kinematics + integrator
-│  ├─ safety.py            # geofence, gust limit, RTL triggers
-│  ├─ sensing.py           # proximity fire detection (stub)
-│  ├─ allocation.py        # Hungarian assignment (ETA matrix)
-│  ├─ planner.py           # A* path planner (grid)
-│  ├─ controller.py        # waypoint tracker (PID-like)
-│  ├─ agents.py            # UAV state model
-│  ├─ suppression.py       # suppression effect proxy
-│  ├─ sim_loop.py          # main simulation loop + logging
-│  ├─ eval_metrics.py      # response/coverage/temp/safety/score
-│  ├─ visualize.py         # matplotlib path plot
-│  └─ run_scenario.py      # CLI entrypoint
+│  ├─ env.py
+│  ├─ dynamics.py
+│  ├─ safety.py
+│  ├─ sensing.py
+│  ├─ allocation.py
+│  ├─ planner.py
+│  ├─ controller.py
+│  ├─ agents.py
+│  ├─ suppression.py
+│  ├─ sim_loop.py
+│  ├─ eval_metrics.py
+│  ├─ visualize.py
+│  ├─ plan_tethered.py
+│  └─ run_scenario.py
 ├─ tests/
 │  ├─ __init__.py
 │  ├─ test_allocation.py
 │  ├─ test_planner.py
-│  └─ test_safety.py
+│  ├─ test_safety.py
+│  ├─ test_tethered.py
+│  └─ test_run_tethered_smoke.py
 ├─ .gitignore
 ├─ Makefile
 ├─ CHANGELOG.md
@@ -71,20 +75,23 @@ python -m src.run_scenario --config configs/default.yaml
 # - reports/summary.json      (aggregated metrics)
 # - reports/paths.png         (paths + fire locations)
 
-# 4) Run a specific scenario
-python -m src.run_scenario --config configs/default.yaml --scenario data/scenarios/case_small.yaml
 
-# 5) Tests
+Run a Specific Scenario (paste as code)
+
+python -m src.run_scenario \
+  --config configs/default.yaml \
+  --scenario data/scenarios/case_small.yaml
+
+
+Tests (paste as code)
+
 pytest -q
 
 
-Artifacts (example)
-
-Below is a sample mission plot and a summary metrics JSON produced by the simulator.
+Artifacts (Example)
 
 Paths plot
-
-For demo purposes, you can also use the example image: paths_demo.png
+Use reports/paths.png (generated) or the demo image reports/paths_demo.png.
 
 
 Summary (JSON)
@@ -110,41 +117,39 @@ make clean     # remove reports/*.csv|*.json|*.png
 
 Inputs
 
-Building: data/building_130f.json
-Discrete facade grid, 130 floors, cell size, access points, no-fly zones.
+Building: data/building_130f.json — discrete facade grid (130 floors), cell size, access points, no-fly zones.
 
-Wind profile: data/wind_profiles.yaml
-Piecewise-linear vertical wind magnitude (m/s) vs altitude (m).
+Wind profile: data/wind_profiles.yaml — piecewise-linear wind magnitude (m/s) vs altitude (m).
 
-Scenarios: data/scenarios/*.yaml
-Fire cells (id, x, y, intensity) and UAV starting points.
+Scenarios: data/scenarios/*.yaml — fire cells (id, x, y, intensity) and UAV starting points.
 
 
-What the simulator does
 
-Environment: 2.5D facade grid; altitude-dependent wind; no-fly masks.
+What the Simulator Does
 
-Allocation: Hungarian algorithm on ETA matrix (minimal arrival time).
+Environment: 2.5D facade; altitude-dependent wind; no-fly masks.
+
+Allocation: Hungarian algorithm over ETA matrix (min arrival time).
 
 Planning: A* (4-neighbors) with wind penalty in edge cost.
 
 Control: waypoint tracking (PID-like), speed clamp.
 
-Safety: geofence margin, gust limit (stub), low-battery RTL.
+Safety: geofence margin, gust limit (stub), RTL at low battery.
 
 Suppression: flow-based temperature-drop proxy (intensity ↓).
 
 Metrics:
 
-response_time_s — first UAV arrival time;
+response_time_s — time to first arrival,
 
-coverage_pct — fraction of fires extinguished (intensity→0);
+coverage_pct — fraction of fires extinguished,
 
-temp_drop_proxy — accumulated proxy for cooling;
+temp_drop_proxy — accumulated cooling proxy,
 
-safety_score — normalized penalty for violations;
+safety_score — normalized penalty for violations,
 
-mission_score — 0.4*coverage + 0.3*temp - 0.3*penalty.
+mission_score — 0.4*coverage + 0.3*temp − 0.3*penalty.
 
 Reports: CSV log, JSON summary, PNG path plot.
 
@@ -157,19 +162,35 @@ Summary:  reports/summary.json
 Plot:     reports/paths.png
 
 
-
 Limitations
 
-Facade-only; no indoor flight; simplified wind/physics; no CFD/smoke occlusion.
-
+Facade-only; simplified wind/physics; no CFD/smoke occlusion.
 Constant UAV parameters; single-shot planning (demo); no refills/multi-goal routing.
-
 For research/education only.
 
+Note: The repo includes example artifacts:
 
-Note. The repository includes example artifacts for documentation purposes:
-• reports/paths.png — generated by running the simulator.
-• paths_demo.png and summary_demo.json — illustrative samples to showcase outputs when a full run is not available.
+reports/paths.png — generated by running the simulator,
+
+reports/paths_demo.png, reports/summary_demo.json — illustrative samples.
+
+
+
+Tethered Nozzle Mode (roof-fed hose)
+
+New scenario: configs/tethered_case.yaml.
+
+Adds quasi-static hose (gravity + wind drag), suspended nozzle, and gentle safety nudges.
+
+New metrics in reports/summary.json:
+time_on_target_s, ir_over_limit_s, tension_N_peak, min_bend_radius_m.
+
+
+Quick run (tethered):
+
+python -m src.run_scenario --config configs/tethered_case.yaml
+
+(tests use fires/starts from data/scenarios/case_small.yaml)
 
 
 Roadmap
@@ -184,8 +205,21 @@ Richer safety taxonomy and per-event dashboards.
 
 
 Versioning
-
 This project follows Semantic Versioning. See CHANGELOG.md for releases and notes.
+
+## [0.2.0-pre] - 2025-11-17
+### Added
+- Tethered nozzle (roof-fed hose) mode + hose model & safety checks.
+- Scenario `configs/tethered_case.yaml`.
+- Online/time-weighted metrics: `time_on_target_s`, `ir_over_limit_s`, `tension_N_peak`, `min_bend_radius_m`.
+
+### Changed
+- README: scenarios and quick run for tethered mode.
+
+---
+## [0.1.0] - 2025-11-16
+### Added
+- Initial public release: baseline simulator, smoke tests, CI.
 
 
 License
