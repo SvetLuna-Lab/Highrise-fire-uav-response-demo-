@@ -6,7 +6,7 @@ env:
 
 sim:
   dt: 0.5
-  t_max: 30.0   # маленький горизонт для smoke-теста
+  t_max: 30.0  
 
 uav:
   v_cruise: 6.0
