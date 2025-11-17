@@ -182,9 +182,24 @@ Multi-agent policies (task re-allocation, comms loss); ROS2/Gazebo bridge.
 Richer safety taxonomy and per-event dashboards.
 
 
+
+### Tethered nozzle mode (roof-fed hose)
+- New scenario: `configs/tethered_case.yaml`
+- Adds quasi-static hose model (gravity + wind drag), suspended nozzle, and safety nudges.
+- New metrics in `reports/summary.json`: `spray_on_target_ratio`, `ir_exposure_time`,
+  `time_on_target_s`, `tension_N_peak`, `min_bend_radius_m`.
+
+**Quick run**
+```bash
+python -m src.run_scenario --config configs/tethered_case.yaml
+
+
+---
+
+
 Versioning
 
-This project follows Semantic Versioning. See CHANGELOG.md for releases and notes.
+We follow Semantic Versioning. Current pre-release: `v0.2.0-pre`. Full notes in [CHANGELOG.md](./CHANGELOG.md).
 
 
 License
