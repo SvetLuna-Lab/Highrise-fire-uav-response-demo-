@@ -183,18 +183,17 @@ Richer safety taxonomy and per-event dashboards.
 
 
 
-### Tethered nozzle mode (roof-fed hose)
+## Tethered nozzle mode (roof-fed hose)
 - New scenario: `configs/tethered_case.yaml`
 - Adds quasi-static hose model (gravity + wind drag), suspended nozzle, and safety nudges.
 - New metrics in `reports/summary.json`: `spray_on_target_ratio`, `ir_exposure_time`,
   `time_on_target_s`, `tension_N_peak`, `min_bend_radius_m`.
 
-**Quick run**
-```bash
+
+Quick run
+
 python -m src.run_scenario --config configs/tethered_case.yaml
 
-
----
 
 
 Versioning
