@@ -1,0 +1,46 @@
+# High-rise facade fire with roof-fed hose + suspended nozzle (tethered mode)
+sim:
+  dt: 0.05
+  T: 240           # seconds
+  seed: 42
+
+env:
+  wind_mps: 6.0
+  wind_dir_deg: 240       # blowing from 240°
+  facade_normal_deg: 90
+  base_alt_m: 110.0       # roof edge altitude
+
+fire:
+  seats:                   # facade seats (windows clusters) in world coords
+    - [12.0, 0.0, 112.0]
+    - [18.0, 0.0, 112.0]
+  intensity0: 1.0          # normalized
+  plume_w_m: 5.0           # lateral plume half-width (proxy)
+  ir_flux_kwpm2: 12.0      # radiant flux near seats
+
+tethered:
+  enabled: true
+  anchor: [15.0, -1.5, 115.0]   # roof anchor (x,y,z)
+  hose:
+    length_m: 35.0
+    linear_mass_kgpm: 0.28
+    diameter_m: 0.038
+    bend_min_m: 0.35
+    damping: 0.2
+    segs: 8
+  nozzle:
+    flow_lps: 8.0
+    pressure_bar: 6.0
+    standoff_m: 2.2
+    therm_shield: true
+    ir_flux_max_wpm2: 12000
+  safety:
+    max_tension_N: 140.0
+
+uav:
+  max_thrust_N: 65.0
+  max_accel_mps2: 5.0
+
+logging:
+  write_paths_png: true
+  write_summary_json: true
