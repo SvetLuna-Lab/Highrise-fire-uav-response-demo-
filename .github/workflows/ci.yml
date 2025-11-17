@@ -1,5 +1,5 @@
-# .github/workflows/ci.yml
 name: CI
+
 on:
   push:
     branches: [ "**" ]
@@ -10,6 +10,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,4 +30,5 @@ jobs:
           if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; fi
 
       - name: Run tests
-        run: pytest -q
+        run: python -m pytest -q
+
