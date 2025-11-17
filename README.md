@@ -196,5 +196,3 @@ If you need a different license for integration/teaching, open an Issue.
 Contributing
 
 Issues and PRs are welcome. Please keep changes small and focused (one feature or fix per PR) and include tests where applicable.
-
-
