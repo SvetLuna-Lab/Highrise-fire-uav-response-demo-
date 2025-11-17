@@ -1,4 +1,5 @@
 # Highrise-fire-uav-response-demo
+![CI](https://github.com/SvetLuna-Lab/Highrise-fire-uav-response-demo-/actions/workflows/ci.yml/badge.svg)
 
 Simulation demo: coordinating a small fleet of UAVs to suppress fires on upper floors of a 130-floor building (facade operations only).  
 **Goal:** a clean, auditable baseline for planning, allocation, safety logic, and simple performance metrics.  
