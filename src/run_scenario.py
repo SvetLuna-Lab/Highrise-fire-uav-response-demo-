@@ -138,20 +138,22 @@ def main() -> None:
     _write_csv(report_dir / "mission_log.csv", log_rows)
 
     # Summary JSON
+   
     summ = summarize(log_rows)
+    summary = {
+        "response_time_s": summ.response_time_s,
+        "coverage_pct":   summ.coverage_pct,
+        "temp_drop_proxy":summ.temp_drop_proxy,
+        "safety_score":   summ.safety_score,
+        "mission_score":  summ.mission_score,
+    }
+
+    summary.update(sim.metrics_summary())
+
     (report_dir / "summary.json").write_text(
-        json.dumps(
-            {
-                "response_time_s": summ.response_time_s,
-                "coverage_pct": summ.coverage_pct,
-                "temp_drop_proxy": summ.temp_drop_proxy,
-                "safety_score": summ.safety_score,
-                "mission_score": summ.mission_score,
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
+        json.dumps(summary, indent=2), encoding="utf-8"
     )
+ 
 
     # Paths plot
     fires_xy = [(f["x"], f["y"]) for f in scenario["fires"]]
