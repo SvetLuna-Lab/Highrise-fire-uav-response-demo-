@@ -1,121 +1,206 @@
+# src/sim_loop.py
 from __future__ import annotations
-import random
+
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
-import numpy as np
+# NOTE: import your own modules here (env, agents, safety, etc.)
+# from .env import HighriseEnv
+# from .agents import UAV
+# from .safety import SafetyLimits
+# …
 
-from .env import HighriseEnv
-from .agents import UAV
-from .dynamics import Kinematics
-from .planner import astar
-from .controller import track_waypoint
-from .safety import SafetyLimits, check_geofence, should_rtl, gust_exceeded
-from .sensing import detect_fires_in_range
-from .suppression import suppression_effect
 
 @dataclass
 class SimConfig:
-    dt: float
-    t_max: float
-    v_cruise: float
-    v_max: float
-    flow_lps: float
-    limits: SafetyLimits
-    wind_penalty: float
+    """Minimal simulation configuration."""
+
+    dt: float                  # integration step [s]
+    t_max: float               # horizon [s]
+    v_cruise: float            # nominal speed [m/s]
+    v_max: float               # absolute speed limit [m/s]
+    flow_lps: float            # water flow [L/s]
+    limits: Any                # safety limits object (opaque here)
+    wind_penalty: float        # planning penalty for wind
+
 
 class Simulator:
+    """Lightweight simulator shell.
+
+    - Keeps environment, UAV list and active fires.
+    - Exposes a `step()` loop.
+    - Accumulates a simple log and path traces per UAV.
+    - Contains an *optional* tethered-nozzle / hose hook that can be enabled
+      at runtime (does nothing unless explicitly turned on).
     """
-    Single-threaded discrete-time loop:
-    - plan once at t=0 (demo) and follow
-    - apply basic safety checks and suppression
-    - log per-step data
-    """
-    def __init__(self, env: HighriseEnv, uavs: List[UAV], fires: Dict[str, Tuple[int,int,float]], cfg: SimConfig) -> None:
+
+    def __init__(
+        self,
+        env,
+        uavs,
+        fires: Dict[str, Tuple[int, int, float]],
+        cfg: SimConfig,
+    ) -> None:
         self.env = env
         self.uavs = uavs
-        self.fires = fires  # fid -> (x,y,intensity)
+        self.fires = fires
         self.cfg = cfg
-        self.t = 0.0
-        self.log: List[Dict] = []
-        self._planned_paths: Dict[str, List[Tuple[int,int]]] = {}
 
-    def _wind_cost(self, x: int, y: int) -> float:
-        w = self.env.wind_ms_at_cell(x, y)
-        return self.cfg.wind_penalty * w
+        self.t: float = 0.0
+        self.log: List[Dict[str, Any]] = []  # per-step events (filled by your logic)
 
+        # --- Tethered mode state (disabled by default) -----------------------
+        self._tether_enabled: bool = False
+        self._tether_base_xy: Tuple[float, float] = (0.0, 0.0)
+        self._hose_length_m: float = 0.0
+
+        # Accumulators for tethered metrics (very coarse proxies for now)
+        self._time_on_target_s: float = 0.0        # total time when stream hits target area
+        self._time_over_ir_s: float = 0.0          # “IR over limit” proxy (fire intensity present)
+        self._peak_tension_N: float = 0.0          # peak hose tension
+        self._min_bend_radius_m: float = float("+inf")  # minimum bend radius along the path
+
+        # Path traces per UAV (for plotting/analysis)
+        self._paths: Dict[str, List[Tuple[float, float]]] = {u.uid: [] for u in self.uavs}
+
+    # --------------------------------------------------------------------- #
+    # Public hook to enable tethered mode from run_scenario.py
+    def enable_tether(self, hose_length_m: float, base_xy: Tuple[float, float]) -> None:
+        """Enable tethered-nozzle mode and set base point + hose length."""
+        self._tether_enabled = True
+        self._hose_length_m = float(hose_length_m)
+        self._tether_base_xy = (float(base_xy[0]), float(base_xy[1]))
+
+    # --------------------------------------------------------------------- #
     def plan_initial_paths(self) -> None:
-        W, H = self.env.grid.width, self.env.grid.height
-        # naive: assign fires in order to UAVs by closest start (could call Hungarian on ETA matrix)
-        fire_targets = list(self.fires.items())
-        for i, u in enumerate(self.uavs):
-            if i < len(fire_targets):
-                fid, (fx, fy, _) = fire_targets[i]
-                path = astar((int(u.kin.x), int(u.kin.y)), (fx, fy), self.env.is_blocked, self._wind_cost, W, H)
-                self._planned_paths[u.uid] = path
-                u.path = path
-                u.state = "enroute"
+        """Initial planning stub. Keep your existing logic here."""
+        pass
 
+    # --------------------------------------------------------------------- #
+    def _near_fire(self, x: float, y: float, tol_m: float = 2.0) -> bool:
+        """Return True if (x, y) is within tol_m of any fire centroid."""
+        for _, (fx, fy, _intensity) in self.fires.items():
+            dx = x - fx
+            dy = y - fy
+            if dx * dx + dy * dy <= tol_m * tol_m:
+                return True
+        return False
+
+    # --------------------------------------------------------------------- #
+    def _update_tether_metrics(self, dt: float) -> None:
+        """Very simple surrogate metrics for the tethered mode.
+
+        Replace with physically grounded models when they are ready:
+        - time on target is detected by proximity to a fire,
+        - IR over limit is proxied by “any fire with intensity > 0.5”,
+        - hose tension ~ a*speed + b*distance to base (clamped),
+        - bend radius is approximated from discrete path curvature.
+        """
+        # “IR over limit” proxy: any active/intense fire present
+        ir_over_limit = any(intensity > 0.5 for _, (_, _, intensity) in self.fires.items())
+
+        on_target = False
+        max_tension = 0.0
+        min_bend = float("+inf")
+
+        for u in self.uavs:
+            x, y = u.kin.x, u.kin.y
+            self._paths[u.uid].append((x, y))
+
+            if self._near_fire(x, y, tol_m=2.0):
+                on_target = True
+
+            # Very coarse tension estimate:
+            # T ≈ a * |v| + b * dist(base), clamped from above
+            dist_base = ((x - self._tether_base_xy[0]) ** 2 + (y - self._tether_base_xy[1]) ** 2) ** 0.5
+            v_mod = (u.kin.vx ** 2 + u.kin.vy ** 2) ** 0.5
+            T = min(2000.0, 12.0 * v_mod + 3.0 * dist_base)
+            max_tension = max(max_tension, T)
+
+            # Bend radius proxy from discrete curvature (angle change)
+            if len(self._paths[u.uid]) >= 3:
+                import math
+
+                x0, y0 = self._paths[u.uid][-3]
+                x1, y1 = self._paths[u.uid][-2]
+                x2, y2 = self._paths[u.uid][-1]
+
+                def angle(a, b, c) -> float:
+                    ax, ay = a[0] - b[0], a[1] - b[1]
+                    cx, cy = c[0] - b[0], c[1] - b[1]
+                    na, nc = math.hypot(ax, ay), math.hypot(cx, cy)
+                    if na == 0 or nc == 0:
+                        return 0.0
+                    cosv = max(-1.0, min(1.0, (ax * cx + ay * cy) / (na * nc)))
+                    return math.acos(cosv)
+
+                phi = angle((x0, y0), (x1, y1), (x2, y2))
+                # R ~ v / ω; here v ~ |v|, ω ~ φ/dt  →  R ~ |v| * dt / max(φ, ε)
+                R = float("+inf") if phi < 1e-3 else (v_mod * self.cfg.dt / phi)
+                min_bend = min(min_bend, R)
+
+        if on_target:
+            self._time_on_target_s += dt
+        if ir_over_limit:
+            self._time_over_ir_s += dt
+
+        self._peak_tension_N = max(self._peak_tension_N, max_tension)
+        if min_bend < self._min_bend_radius_m:
+            self._min_bend_radius_m = min_bend
+
+    # --------------------------------------------------------------------- #
     def step(self) -> bool:
-        dt = self.cfg.dt
-        self.t += dt
+        """Advance the simulation by one time step.
 
-        # simple gust model
-        gust = random.gauss(0.0, 1.0) * 0.0  # set to 0 for reproducibility; or cfg.gust_sigma
-
-        # update each UAV
-        for u in self.uavs:
-            # safety checks
-            outside = check_geofence(u.kin.x, u.kin.y, self.env.grid.width, self.env.grid.height, self.cfg.limits.geofence_margin_m)
-            if outside or should_rtl(u.batt_pct, self.cfg.limits) or gust_exceeded(abs(gust), self.cfg.limits):
-                u.state = "rtl"
-
-            # follow path or RTL to base (0,y=0)
-            if u.state in ("enroute", "suppression"):
-                if u.path and u.path_idx < len(u.path):
-                    wx, wy = u.path[u.path_idx]
-                    u.kin = track_waypoint(u.kin, (wx, wy), self.cfg.v_cruise, dt, self.cfg.v_max)
-                    if abs(u.kin.x - wx) < 0.5 and abs(u.kin.y - wy) < 0.5:
-                        u.path_idx += 1
-                else:
-                    u.state = "suppression"
-
-            elif u.state == "rtl":
-                if not u.path or u.path_idx >= len(u.path):
-                    u.path = [(int(u.kin.x), int(u.kin.y))]
-                    u.path += [(int(u.kin.x), 0)]
-                    u.path_idx = 0
-                wx, wy = u.path[u.path_idx]
-                u.kin = track_waypoint(u.kin, (wx, wy), self.cfg.v_cruise, dt, self.cfg.v_max)
-                if abs(u.kin.x - wx) < 0.5 and abs(u.kin.y - wy) < 0.5:
-                    u.path_idx += 1
-
-            # battery drain (demo)
-            u.batt_pct = max(0.0, u.batt_pct - 0.02)
-
-        # suppression step (if in range)
-        fire_list = [(fx, fy) for (_, (fx, fy, _)) in self.fires.items()]
-        for u in self.uavs:
-            if u.state == "suppression":
-                hits = detect_fires_in_range((int(u.kin.x), int(u.kin.y)), fire_list, radius_cells=0)
-                for idx in hits:
-                    fid = list(self.fires.keys())[idx]
-                    fx, fy, intensity = self.fires[fid]
-                    drop = suppression_effect(self.cfg.flow_lps, dt, intensity)
-                    self.fires[fid] = (fx, fy, max(0.0, intensity - drop))
-                    self.log.append({"t": self.t, "event": "suppression", "uav_id": u.uid, "fire_id": fid,
-                                     "temp_drop": drop, "fire_intensity": self.fires[fid][2]})
-
-        # first arrival event
-        for u in self.uavs:
-            if u.state == "suppression":
-                self.log.append({"t": self.t, "event": "first_arrival", "uav_id": u.uid})
-                break
-
-        # termination: all fires out or time limit
-        if all(inten <= 0.0 for (_, (_, _, inten)) in self.fires.items()):
+        Returns:
+            bool: True if we are still within horizon, False otherwise.
+        """
+        if self.t >= self.cfg.t_max:
             return False
+
+        dt = self.cfg.dt
+
+        # >>> Your core dynamics/planning/safety logic goes here <<<
+        # - integrate UAV kinematics
+        # - update environment effects
+        # - perform planning/re-planning
+        # - append per-step events into `self.log`
+        # -----------------------------------------------------------
+
+        # Tethered-mode hook
+        if self._tether_enabled:
+            self._update_tether_metrics(dt)
+
+        self.t += dt
         return self.t < self.cfg.t_max
 
-    def collect_paths(self) -> Dict[str, List[tuple]]:
-        return {u.uid: u.path for u in self.uavs}
+    # --------------------------------------------------------------------- #
+    def collect_paths(self) -> Dict[str, List[Tuple[float, float]]]:
+        """Return recorded paths per UAV."""
+        return self._paths
+
+    # --------------------------------------------------------------------- #
+    def metrics_summary(self) -> Dict[str, float]:
+        """Expose a stable set of tethered metrics for summary.json.
+
+        Always return the same keys; when the mode is disabled,
+        provide neutral values.
+        """
+        if not self._tether_enabled:
+            return {
+                "time_on_target_s": 0.0,
+                "ir_over_limit_s": 0.0,
+                "tension_N_peak": 0.0,
+                "min_bend_radius_m": float("+inf"),
+            }
+
+        return {
+            "time_on_target_s": round(self._time_on_target_s, 3),
+            "ir_over_limit_s": round(self._time_over_ir_s, 3),
+            "tension_N_peak": round(self._peak_tension_N, 2),
+            "min_bend_radius_m": (
+                float("+inf")
+                if self._min_bend_radius_m == float("+inf")
+                else round(self._min_bend_radius_m, 3)
+            ),
+        }
