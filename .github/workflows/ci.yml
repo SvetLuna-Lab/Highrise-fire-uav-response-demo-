@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then \
+            sed -E '/^\s*#/d;/^\s*$*/d' requirements-dev.txt > /tmp/req-dev.txt || true; \
+            pip install -r /tmp/req-dev.txt || true; \
+          fi
+
+      - name: Run pytest
+        run: pytest -q
+
+      # необязательно, но удобно: быстрый "smoke"-прогон сценария и артефакты
+      - name: Smoke run (tethered_case)
+        run: |
+          mkdir -p reports
+          python -m src.run_scenario --config configs/tethered_case.yaml --scenario data/scenarios/case_small.yaml
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            reports/mission_log.csv
+            reports/summary.json
+            reports/paths.png
+          if-no-files-found: ignore
